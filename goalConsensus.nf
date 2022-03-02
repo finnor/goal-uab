@@ -1,8 +1,8 @@
 #!/usr/bin/env nextflow
 
-fpalgo = params.fpalgo.split(",") ?: []
-ssalgo = params.ssalgo.split(",") ?: []
-svalgo = params.svalgo.split(",") ?: []
+fpalgo = params.fpalgo ? params.fpalgo.split(",") : []
+ssalgo = params.ssalgo ? params.ssalgo.split(",") : []
+svalgo = params.svalgo ? params.svalgo.split(",") : []
 
 reffa=file("$params.reffa")
 dbsnp=file(params.dbsnp)
