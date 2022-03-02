@@ -37,6 +37,6 @@ fi
 module load Singularity
 module load Nextflow
 
-nextflow run -w /data/user/$USER/GOAL/pipeline_output/run_dir /home/$USER/goal_school/goalConsensus.nf \
+nextflow run ./goalConsensus.nf \
     --input $INPUT_DIR $OUTPUT_DIR_OPT \
     -profile uab_slurm -resume
