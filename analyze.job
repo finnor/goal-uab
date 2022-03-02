@@ -1,0 +1,44 @@
+#!/bin/bash
+#SBATCH --share
+#SBATCH --partition=short
+#SBATCH --job-name=goal_pipeline
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --time=8:00:00
+#SBATCH --mem=65536
+
+
+help_and_exit() {
+  local retval=${1:-1}
+  cat <<EOF
+${0##*/} [-o|--output-dir] input-dir
+EOF
+  exit "$retval"
+}
+
+
+while (( $# )); do
+  case $1 in
+    -o|--output-dir)  OUTPUT_DIR=$2; shift ;;
+    -*)        printf 'Unknown option: %q\n\n' "$1"
+               help_and_exit 1 ;;
+    *)         args+=( "$1" ) ;;
+  esac
+  shift
+done
+set -- "${args[@]}"
+
+INPUT_DIR=$1
+if [ ! -z ${OUTPUT_DIR+x} ];
+then
+  OUTPUT_DIR_OPT="--output $OUTPUT_DIR"
+fi
+
+module load Singularity
+module load Nextflow
+
+nextflow run -w /data/user/$USER/GOAL/pipeline_output/run_dir /home/$USER/goal_school/goalConsensus.nf \
+    --input $INPUT_DIR $OUTPUT_DIR_OPT \
+    --capture /data/user/$USER/GOAL/panels/GOAL_GRCh37_nextflow/goal_core497.hg19.bed \
+    --capturedir /data/user/$USER/GOAL/panels/GOAL_GRCh37_nextflow \
+    -profile uab_slurm -resume
