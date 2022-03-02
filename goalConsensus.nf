@@ -11,10 +11,6 @@ index_path=file(params.genome)
 capturebed = file("$params.capture")
 capturedir = file("$params.capturedir")
 
-skipCNV = false
-if(capturedir.isEmpty()) {
-  skipCNV = true
-}
 alignopts = ''
 if (params.markdups == 'fgbio_umi') {
    alignopts='-u'
@@ -60,7 +56,7 @@ new File(params.design).withReader { reader ->
        	   }
      	   reads << tuple(row[cidx],row[fidx],[fileMap.get(row[oneidx]),fileMap.get(row[twoidx])])
      	   ids << tuple(row[cidx],row[tidx],row[nidx])
-      }	
+      }
    }
 }
 
@@ -93,7 +89,7 @@ process dalign {
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  
+
   bash ${repoDir}/process_scripts/alignment/dnaseqalign.sh -r $index_path -p $sampleid -x ${fq1} -y ${fq2} -c ${task.cpus} -m \${memory} $alignopts
   """
 }
@@ -110,7 +106,7 @@ process abra2 {
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/alignment/abra2.sh -r $index_path -p $sampleid -b ${sbam} -t ${capturebed} -c ${task.cpus} -m \${memory} 
+  bash ${repoDir}/process_scripts/alignment/abra2.sh -r $index_path -p $sampleid -b ${sbam} -t ${capturebed} -c ${task.cpus} -m \${memory}
   mv ${sbam} ${sampleid}.ori.bam
   mv ${bai} ${sampleid}.ori.bai
   mv ${sampleid}.abra2.bam  ${sampleid}.bam
@@ -144,7 +140,7 @@ process dna_bamqc {
   set caseid,sampleid, file(gbam),file(idx),file(trimreport) from qcbam
   output:
   file("*fastqc*") into fastqc
-  file("${sampleid}*txt") into dalignstats	
+  file("${sampleid}*txt") into dalignstats
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -169,7 +165,7 @@ process cnv {
   file("${sampleid}.*txt") into cnvtxt
   file("${sampleid}.cnv*pdf") into cnvpdf
   when:
-  skipCNV == false && params.min == false
+  params.skipCNV == false && params.min == false
   script:
   """
   bash ${repoDir}/process_scripts/variants/cnvkit.sh -r $index_path -b $sbam -p $sampleid -d $capturedir
@@ -186,8 +182,8 @@ process itdseek {
 
   output:
   file("${sampleid}.itdseek_tandemdup.vcf.gz") into itdseekvcf
-  when: 
-  params.min == false
+  when:
+  params.skipITDSeek && params.min == false
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -213,20 +209,20 @@ process gatkbam {
 }
 
 oribam
-   .groupTuple(by:[0,1,2])
-   .into { msibam; }
+  .groupTuple(by:[0,1,2])
+  .into { msibam; }
 
 abrabam
-   .groupTuple(by:[0,1,2])
-   .into { svbam; }
+  .groupTuple(by:[0,1,2])
+  .into { svbam; }
 
 consbam
-   .groupTuple(by:[0,1,2])
-   .into { checkbams; sombam; germbam; pindelbam; strelkabam; }
+  .groupTuple(by:[0,1,2])
+  .into { checkbams; sombam; germbam; }
 
 gtxbam
-   .groupTuple(by:[0,1,2])		
-   .set { mutectbam }
+  .groupTuple(by:[0,1,2])
+  .set { mutectbam; pindelbam; }
 
 process msi {
   //executor 'local'
@@ -237,8 +233,8 @@ process msi {
   set caseid,tid,nid,file(ssbam),file(ssidx) from msibam
   output:
   file("${caseid}*") into msiout
-  when: 
-  params.min == false
+  when:
+  params.skipMSI && params.min == false
   script:
   if ( somatic[caseid] == true )
   """
@@ -260,7 +256,7 @@ process pindel {
   file("${caseid}.pindel_tandemdup.vcf.gz") into tdvcf
   set caseid,file("${caseid}.pindel.vcf.gz") into pindelvcf
   file("${caseid}.pindel.genefusion.txt") into pindelgf
-  when: 
+  when:
   params.min == false
   script:
   """
@@ -281,16 +277,16 @@ process sv {
   set caseid,file("${caseid}.${algo}.vcf.gz") into svvcf
   set caseid,file("${caseid}.${algo}.sv.vcf.gz") optional true into svsv
   file("${caseid}.${algo}.genefusion.txt") into svgf
-  when: 
+  when:
   params.min == false
-  script:				       
-  if ( somatic[caseid] == true ) 
+  script:
+  if ( somatic[caseid] == true )
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -x ${tid} -y ${nid} -b ${tid}.bam -n ${nid}.bam -p $caseid -a ${algo} -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f 
+  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -x ${tid} -y ${nid} -b ${tid}.bam -n ${nid}.bam -p $caseid -a ${algo} -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
   """
-  else 
+  else
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
@@ -308,7 +304,7 @@ process mutect {
   set caseid,file("${caseid}.mutect.vcf.gz") into mutectvcf
   set caseid,file("${caseid}.mutect.ori.vcf.gz") into mutectori
   script:
-  if ( somatic[caseid] == true ) 
+  if ( somatic[caseid] == true )
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
@@ -344,7 +340,7 @@ process somvc {
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
   bash ${repoDir}/process_scripts/variants/somatic_vc.sh -r $index_path -p $caseid -x $tid -y $nid -n ${nid}.consensus.bam -t ${tid}.consensus.bam -a ${algo} -b $capturebed -c ${task.cpus} -m \${memory}
-  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.${algo} -v ${caseid}.${algo}.vcf.gz 
+  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.${algo} -v ${caseid}.${algo}.vcf.gz
   """
 }
 
@@ -362,33 +358,13 @@ process germvc {
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
   bash ${repoDir}/process_scripts/variants/germline_vc.sh -r $index_path -p $caseid -a ${algo} -b $capturebed -c ${task.cpus} -m \${memory}
-  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.${algo} -v ${caseid}.${algo}.vcf.gz 
-  """
-}
-
-process germstrelka {
-  label 'variantcalling'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
-
-  input:
-  set caseid,tid,nid,file(gbam),file(gidx) from strelkabam
-  output:
-  set caseid,file("${caseid}.strelka2.vcf.gz") into strelkavcf
-  set caseid,file("${caseid}.strelka2.ori.vcf.gz") into strelkaori
-  when: 
-  somatic[caseid] == false
-  script:
-  """
-  memory=\$(echo ${task.memory} | cut -d ' ' -f1)
-  echo \$memory
-  bash ${repoDir}/process_scripts/variants/germline_vc.sh -r $index_path -p $caseid -a strelka2 -b $capturebed -c ${task.cpus} -m \${memory}
-  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.strelka2 -v ${caseid}.strelka2.vcf.gz 
+  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.${algo} -v ${caseid}.${algo}.vcf.gz
   """
 }
 
 Channel
   .empty()
-  .mix(mutectvcf,ssvcf,pindelvcf,germvcf,strelkavcf)
+  .mix(mutectvcf,ssvcf,pindelvcf,germvcf)
   .groupTuple(by:0)
   .set { vcflist}
 
