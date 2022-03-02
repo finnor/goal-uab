@@ -222,7 +222,7 @@ consbam
 
 gtxbam
   .groupTuple(by:[0,1,2])
-  .set { mutectbam; pindelbam; }
+  .into { mutectbam; pindelbam; }
 
 process msi {
   //executor 'local'
