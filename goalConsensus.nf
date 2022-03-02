@@ -188,7 +188,7 @@ process itdseek {
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/variants/svcalling.sh -b $sbam -r $index_path -p $sampleid -l $params.itd_gene_bed -a itdseek -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
+  bash ${repoDir}/process_scripts/variants/svcalling.sh -b $sbam -r $index_path -p $sampleid -l $params.itdbed -a itdseek -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
   """
 }
 
@@ -262,7 +262,7 @@ process pindel {
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -p $caseid -l $params.itd_gene_bed -a pindel -c $params.goal_core_bed -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
+  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -p $caseid -l $params.itdbed -a pindel -c $capturebed -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
   """
 }
 

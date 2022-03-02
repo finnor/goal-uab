@@ -39,6 +39,4 @@ module load Nextflow
 
 nextflow run -w /data/user/$USER/GOAL/pipeline_output/run_dir /home/$USER/goal_school/goalConsensus.nf \
     --input $INPUT_DIR $OUTPUT_DIR_OPT \
-    --capture /data/user/$USER/GOAL/panels/GOAL_GRCh37_nextflow/goal_core497.hg19.bed \
-    --capturedir /data/user/$USER/GOAL/panels/GOAL_GRCh37_nextflow \
     -profile uab_slurm -resume
