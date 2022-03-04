@@ -183,7 +183,7 @@ process itdseek {
   output:
   file("${sampleid}.itdseek_tandemdup.vcf.gz") into itdseekvcf
   when:
-  params.skipITDSeek && params.min == false
+  params.skipITDSeek == false && params.min == false
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -234,7 +234,7 @@ process msi {
   output:
   file("${caseid}*") into msiout
   when:
-  params.skipMSI && params.min == false
+  params.skipMSI == false && params.min == false
   script:
   if ( somatic[caseid] == true )
   """
