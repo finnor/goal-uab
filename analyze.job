@@ -11,7 +11,7 @@
 help_and_exit() {
   local retval=${1:-1}
   cat <<EOF
-${0##*/} [-o|--output-dir] input-dir
+${0##*/} [-o|--output-dir] [-p|--profile] input-dir
 EOF
   exit "$retval"
 }
@@ -20,6 +20,7 @@ EOF
 while (( $# )); do
   case $1 in
     -o|--output-dir)  OUTPUT_DIR=$2; shift ;;
+    -p|--profile)     PROFILE=$2; shift ;;
     -*)        printf 'Unknown option: %q\n\n' "$1"
                help_and_exit 1 ;;
     *)         args+=( "$1" ) ;;
@@ -29,15 +30,26 @@ done
 set -- "${args[@]}"
 
 INPUT_DIR=$1
+INPUT_NAME="$(basename $(dirname $INPUT_DIR))"
 if [ ! -z ${OUTPUT_DIR+x} ];
 then
   OUTPUT_DIR_OPT="--output $OUTPUT_DIR"
+fi
+
+if [ ! -z ${PROFILE+x} ];
+then
+  PROFILE_OPT="--profile $PROFILE"
+else
+  PROFILE_OPT="--profile uab_cheaha"
 fi
 
 module load Singularity
 module load Nextflow
 
 nextflow run ./goalConsensus.nf \
-    -w /data/user/$USER/GOAL/work_dir \
-    --input $INPUT_DIR $OUTPUT_DIR_OPT \
-    -profile uab_cheaha -resume
+  -w /data/user/$USER/GOAL/work_dir \
+  --input $INPUT_DIR $OUTPUT_DIR_OPT \
+  $PROFILE_OPT \
+  -with-report logs/${INPUT_NAME}/report.html \
+  -with-timeline logs/${INPUT_NAME}/timeline.html
+  -with-trace logs/${INPUT_NAME}/trace.txt -resume
