@@ -5,9 +5,8 @@ ssalgo = params.ssalgo ? params.ssalgo.split(",") : []
 svalgo = params.svalgo ? params.svalgo.split(",") : []
 
 reffa=file("$params.reffa")
-dbsnp=file(params.dbsnp)
-knownindel=file(params.indel)
-index_path=file(params.genome)
+dbsnp=file("$params.dbsnp")
+index_path=file("$params.genome")
 capturebed = file("$params.capture")
 capturedir = file("$params.capturedir")
 
