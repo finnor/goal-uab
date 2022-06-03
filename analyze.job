@@ -38,6 +38,6 @@ module load Singularity
 module load Nextflow
 
 nextflow run ./goalConsensus.nf \
-    -w /data/user/$USER/GOAL/PIPELINE_INPUT/work \
+    -w /data/user/$USER/GOAL/work_dir \
     --input $INPUT_DIR $OUTPUT_DIR_OPT \
     -profile uab_slurm -resume
