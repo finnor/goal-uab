@@ -53,13 +53,13 @@ then
   then
     WORD_DIR_OPT="-w $PWD/work_dir"
   fi
-  PROFILE_OPT="--profile $PROFILE"
+  PROFILE_OPT="-profile $PROFILE"
 else
   # Assume Cheaha
   module load Singularity
   module load Nextflow
   WORD_DIR_OPT="-w /data/user/$USER/GOAL/work_dir"
-  PROFILE_OPT="--profile uab_cheaha"
+  PROFILE_OPT="-profile uab_cheaha"
 fi
 
 nextflow run ./goalConsensus.nf \
