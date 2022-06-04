@@ -42,18 +42,28 @@ then
   then
     module load Singularity
     module load Nextflow
+    WORD_DIR_OPT="-w /data/user/$USER/GOAL/work_dir"
   fi
   if [ "$PROFILE" == "uab_hydrogen" ]
   then
     module load Nextflow
+    WORD_DIR_OPT="-w /scratch/goal_pipeline/work_dir"
+  fi
+  if [ "$PROFILE" == "uab_local" ]
+  then
+    WORD_DIR_OPT="-w $PWD/work_dir"
   fi
   PROFILE_OPT="--profile $PROFILE"
 else
+  # Assume Cheaha
+  module load Singularity
+  module load Nextflow
+  WORD_DIR_OPT="-w /data/user/$USER/GOAL/work_dir"
   PROFILE_OPT="--profile uab_cheaha"
 fi
 
 nextflow run ./goalConsensus.nf \
-  -w /data/user/$USER/GOAL/work_dir \
+  $WORD_DIR_OPT \
   --input $INPUT_DIR $OUTPUT_DIR_OPT \
   $PROFILE_OPT \
   -with-report logs/${INPUT_NAME}/report.html \
