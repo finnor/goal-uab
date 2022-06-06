@@ -110,8 +110,22 @@ The design file must named design.txt and be in tab seperated format for the wor
 
 ### DNA Run Workflow
 
+On Cheaha
 ```
-nextflow run -w $workdir ${baseDir}/dna.nf --input /project/shared/bicf_workflow_ref/workflow_testdata/germline_variants/fastq --output ${basedir}/output --seqrunid 'SHI1333-27' --pon /project/shared/bicf_workflow_ref/human/grch38_cloud/panels/UTSW_V4_heme/mutect2.pon.vcf.gz --capture /project/shared/bicf_workflow_ref/human/grch38_cloud/panels/UTSW_V4_heme/targetpanel.bed --capturedir /project/shared/bicf_workflow_ref/human/grch38_cloud/panels/UTSW_V4_heme --version $gittag --genome /project/shared/bicf_workflow_ref/human/grch38_cloud/dnaref -resume
+RUN=<Sequencer Run ID>
+sbatch analyze.job /data/user/$USER/GOAL/PIPELINE_INPUT/${RUN} -o /data/user/$USER/GOAL/PIPELINE_OUTPUT/${RUN}
+```
+
+On Hydrogen
+```
+RUN=<Sequencer Run ID>
+qsub -cwd -N goal_pipeline analyze.job /scratch/goal_pipeline/PIPELINE_INPUT/${RUN} -o /scratch/PIPELINE_OUTPUT/GOAL/${RUN} -p uab_hydrogen
+```
+
+On local machine
+```
+RUN=<Sequencer Run ID>
+./analyze.job <Path to input>/${RUN} -o <Path to output>/${RUN} -p uab_local
 ```
 
 ## Abbacus: RNASeq Workflow

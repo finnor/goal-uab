@@ -3,24 +3,25 @@
 #SBATCH --partition=short
 #SBATCH --job-name=goal_pipeline
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=8
 #SBATCH --time=8:00:00
-#SBATCH --mem=65536
+#SBATCH --mem=64G
 
 
 help_and_exit() {
   local retval=${1:-1}
   cat <<EOF
-${0##*/} [-o|--output-dir] [-p|--profile] input-dir
+${0##*/} [-o|--output-dir] [-p|--profile] [-n|--no-resume] input-dir
 EOF
   exit "$retval"
 }
 
-
+NO_RESUME="FALSE"
 while (( $# )); do
   case $1 in
     -o|--output-dir)  OUTPUT_DIR=$2; shift ;;
     -p|--profile)     PROFILE=$2; shift ;;
+    -n|--no-resume)     NO_RESUME="TRUE"; shift ;;
     -*)        printf 'Unknown option: %q\n\n' "$1"
                help_and_exit 1 ;;
     *)         args+=( "$1" ) ;;
@@ -30,7 +31,7 @@ done
 set -- "${args[@]}"
 
 INPUT_DIR=$1
-INPUT_NAME="$(basename $(dirname $INPUT_DIR))"
+INPUT_NAME="$(basename $INPUT_DIR)"
 if [ ! -z ${OUTPUT_DIR+x} ];
 then
   OUTPUT_DIR_OPT="--output $OUTPUT_DIR"
@@ -62,10 +63,17 @@ else
   PROFILE_OPT="-profile uab_cheaha"
 fi
 
-nextflow run ./goalConsensus.nf \
+if [ "$NO_RESUME" == "FALSE" ]
+then
+  RESUME_OPT="-resume"
+else
+  RESUME_OPT=""
+fi
+
+./nextflow run ./goalConsensus.nf \
   $WORD_DIR_OPT \
   --input $INPUT_DIR $OUTPUT_DIR_OPT \
   $PROFILE_OPT \
   -with-report logs/${INPUT_NAME}/report.html \
   -with-timeline logs/${INPUT_NAME}/timeline.html \
-  -with-trace logs/${INPUT_NAME}/trace.txt -resume
+  -with-trace logs/${INPUT_NAME}/trace.txt ${RESUME_OPT}

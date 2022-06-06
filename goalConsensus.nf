@@ -149,9 +149,7 @@ process dna_bamqc {
 }
 
 process cnv {
-  //executor 'local'
   label 'structuralvariant'
-  //errorStrategy 'ignore'
   publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
   input:
   set caseid,sampleid,file(sbam),file(sidx) from cnvbam
@@ -172,9 +170,7 @@ process cnv {
 }
 
 process itdseek {
-  //executor 'local'
   label 'structuralvariant'
-  //errorStrategy 'ignore'
   publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
   input:
   set caseid,sampleid,file(sbam),file(sidx) from itdbam
@@ -224,10 +220,8 @@ gtxbam
   .into { mutectbam; pindelbam; }
 
 process msi {
-  //executor 'local'
   label 'profiling_qc'
   publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
-  //errorStrategy 'ignore'
   input:
   set caseid,tid,nid,file(ssbam),file(ssidx) from msibam
   output:
@@ -246,7 +240,6 @@ process msi {
 }
 
 process pindel {
-  //label 'structuralvariant'
   label 'pindel'
   publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
   input:
@@ -322,9 +315,6 @@ process mutect {
 process somvc {
   publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
   label 'variantcalling'
-  //errorStrategy { sleep(Math.pow(2, task.attempt) * 200 as long); return 'retry' }
-  maxErrors 20
-  //queue '32GB,super'
 
   input:
   set caseid,tid,nid,file(ssbam),file(ssidx) from sombam
@@ -368,9 +358,7 @@ Channel
   .set { vcflist}
 
 process integrate {
-  //executor 'local'
   label 'variantcalling'
-  //errorStrategy 'ignore'
   publishDir "$params.output/$caseid/dnavcf", mode: 'copy'
   input:
   set caseid,file(vcf) from vcflist
