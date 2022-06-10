@@ -47,10 +47,12 @@ then
 elif [ $algo == 'picard_umi' ]
 then
     java -XX:ParallelGCThreads=$cpus -Djava.io.tmpdir=./ -Xmx${memory}g  -jar $PICARD/picard.jar MarkDuplicates BARCODE_TAG=RX I=${sbam} O=${pair_id}.dedup.bam M=${pair_id}.dedup.stat.txt
-elif [ $algo == 'fgbio_umi' ]   
+elif [ $algo == 'fgbio_umi' ]
 then
     samtools index -@ $cpus ${sbam}
-    fgbio --tmp-dir ./ GroupReadsByUmi -s identity -i ${sbam} -o group.bam --family-size-histogram ${pair_id}.umihist.txt -e 0 -m 0
+    java -XX:ParallelGCThreads=$cpus -Djava.io.tmpdir=./ -Xmx${memory}g  -jar $PICARD/picard.jar SortSam I=${sbam} O=sorted_q.bam SORT_ORDER=queryname
+    fgbio --tmp-dir ./ SetMateInformation -i sorted_q.bam -o mated.bam
+    fgbio --tmp-dir ./ GroupReadsByUmi -s identity -i mated.bam -o group.bam --family-size-histogram ${pair_id}.umihist.txt -e 0 -m 0
     fgbio --tmp-dir ./ CallMolecularConsensusReads -i group.bam -p consensus -M 1 -o ${pair_id}.consensus.bam -S ':none:'
     samtools index -@ $cpus ${pair_id}.consensus.bam
     samtools fastq -1 ${pair_id}.consensus.R1.fastq -2 ${pair_id}.consensus.R2.fastq ${pair_id}.consensus.bam
@@ -67,6 +69,6 @@ then
     samtools sort --threads $cpus -o ${pair_id}.group.bam group.bam
     samtools index -@ $cpus ${pair_id}.group.bam
 else
-    cp ${sbam} ${pair_id}.dedup.bam    
+    cp ${sbam} ${pair_id}.dedup.bam
 fi
 samtools index -@ $cpus ${pair_id}.dedup.bam

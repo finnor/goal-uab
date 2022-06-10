@@ -4,7 +4,7 @@
 #SBATCH --job-name=goal_pipeline
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=8:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mem=64G
 
 
@@ -39,7 +39,7 @@ fi
 
 if [ ! -z ${PROFILE+x} ];
 then
-  if [ "$PROFILE" == "uab_cheaha" ]
+  if [ "$PROFILE" == "uab_cheaha" ] ||  [ "$PROFILE" == "uab_cheaha_local" ]
   then
     module load Singularity
     module load Nextflow
@@ -70,10 +70,10 @@ else
   RESUME_OPT=""
 fi
 
-./nextflow run ./goalConsensus.nf \
+nextflow run ./goalConsensus.nf \
   $WORD_DIR_OPT \
   --input $INPUT_DIR $OUTPUT_DIR_OPT \
-  $PROFILE_OPT \
+  $PROFILE_OPT $RESUME_OPT \
   -with-report logs/${INPUT_NAME}/report.html \
   -with-timeline logs/${INPUT_NAME}/timeline.html \
-  -with-trace logs/${INPUT_NAME}/trace.txt ${RESUME_OPT}
+  -with-trace logs/${INPUT_NAME}/trace.txt

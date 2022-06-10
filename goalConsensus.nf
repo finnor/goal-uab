@@ -11,7 +11,7 @@ capturebed = file("$params.capture")
 capturedir = file("$params.capturedir")
 
 alignopts = ''
-if (params.markdups == 'fgbio_umi') {
+if (params.markdups == 'fgbio_umi' || params.markdups == 'picard_umi') {
    alignopts='-u'
 }
 repoDir=workflow.projectDir
