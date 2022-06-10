@@ -22,53 +22,56 @@ ponopt=''
 if (params.pon) {
    ponopt="-q $params.pon"
 }
-def somatic = [:]
-def ids = []
-def reads = []
 
-params.design="$params.input/design.txt"
-params.fastqs="$params.input/*.fastq.gz"
-fastqs=file(params.fastqs)
-design_file=file(params.design)
-def fileMap = [:]
-fastqs.each {
-  final fileName = it.getFileName().toString()
-  prefix = fileName.lastIndexOf('/')
-  fileMap[fileName] = it
+input_dir = file("$params.input")
+sample_sheet = file("$params.input/SampleSheet.csv")
+
+if( ! input_dir || ! sample_sheet) { error "Could not find required files" }
+
+process mutate_sample_sheet {
+  label 'python'
+  input:
+  file sample_sheet_file from sample_sheet
+  output:
+  file("NewSampleSheet.csv") into bcl_convert_sample_sheet
+  shell:
+    """
+    python ${repoDir}/process_scripts/uab/mutateSampleSheet.py ${sample_sheet_file} "${params.overrideCycles}"
+    """
 }
 
-new File(params.design).withReader { reader ->
-   def hline = reader.readLine()
-   def header = hline.split("\t")
-   cidx = header.findIndexOf{it == 'CaseID'};
-   tidx = header.findIndexOf{it == 'TumorID'};
-   nidx = header.findIndexOf{it == 'NormalID'};
-   fidx = header.findIndexOf{it == 'SampleID'};
-   oneidx = header.findIndexOf{it == 'FqR1'};
-   twoidx = header.findIndexOf{it == 'FqR2'};
-   while (line = reader.readLine()) {
-  	   def row = line.split("\t")
-      if (fileMap.get(row[oneidx]) != null) {
-       	   somatic[row[cidx]] = true
-      	   if (row[nidx] == '') {
-       	       somatic[row[cidx]] = false
-       	   }
-     	   reads << tuple(row[cidx],row[fidx],[fileMap.get(row[oneidx]),fileMap.get(row[twoidx])])
-     	   ids << tuple(row[cidx],row[tidx],row[nidx])
-      }
-   }
+process bcl_convert {
+  label 'bcl_convert'
+  publishDir "$params.output/fastqs", mode: 'copy'
+  input:
+  file input_bcl from input_dir
+  file sample_sheet from bcl_convert_sample_sheet
+  output:
+  file("*.fastq.gz") into dtrim_reads
+  file("SampleSheet.csv")
+  script:
+  """
+  bcl-convert bcl-convert \
+    --bcl-input-directory ${input_bcl} --sample-sheet ${sample_sheet} --output-directory ./ --no-lane-splitting true --force
+  cp ${sample_sheet} SampleSheet.csv
+  rm -rf Undetermined*
+  """
 }
 
-if( ! reads) { error "Didn't match any input files with entries in the design file" }
+dtrim_reads
+  .flatten()
+  .map { read -> [read.name.split("_")[0] , read] }
+  .groupTuple(by: 0)
+  .set { reads; }
+
 
 process dtrim {
   label 'trim'
-  publishDir "$params.output/$caseid/dnaout", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnaout", mode: 'copy'
   input:
-  set caseid,sampleid, file(fqs) from reads
-  set caseid,tid,nid from ids
+  set sampleid, file(fqs) from reads
   output:
-  set caseid,tid,nid,sampleid,file("${sampleid}.trim.R1.fastq.gz"),file("${sampleid}.trim.R2.fastq.gz"),file("${sampleid}.trimreport.txt") into treads
+  set sampleid,file("${sampleid}.trim.R1.fastq.gz"),file("${sampleid}.trim.R2.fastq.gz"),file("${sampleid}.trimreport.txt") into treads
   script:
   """
   bash ${repoDir}/process_scripts/preproc_fastq/trimgalore.sh -f -p ${sampleid} ${fqs}
@@ -76,14 +79,14 @@ process dtrim {
 }
 process dalign {
   label 'dnaalign'
-  publishDir "$params.output/$caseid/dnaout", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnaout", mode: 'copy'
   input:
-  set caseid,tid,nid,sampleid,file(fq1),file(fq2),file(trimout) from treads
+  set sampleid,file(fq1),file(fq2),file(trimout) from treads
   output:
-  set caseid,sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into cnvbam
-  set caseid,sampleid, file("${sampleid}.bam"),file("${sampleid}.bam.bai"),file(trimout) into qcbam
-  set caseid,tid,nid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into oribam
-  set caseid,tid,nid,sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into align
+  set sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into cnvbam
+  set sampleid, file("${sampleid}.bam"),file("${sampleid}.bam.bai"),file(trimout) into qcbam
+  set sampleid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into oribam
+  set sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into align
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -94,13 +97,13 @@ process dalign {
 }
 process abra2 {
   label 'abra2'
-  publishDir "$params.output/$caseid/dnaout", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnaout", mode: 'copy'
   input:
-  set caseid,tid,nid,sampleid,file(sbam),file(bai) from align
+  set sampleid,file(sbam),file(bai) from align
   output:
-  set caseid,sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into itdbam
-  set caseid,tid,nid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into abrabam
-  set caseid,tid,nid,sampleid, file("${sampleid}.bam"),file("${sampleid}.bam.bai") into mdupbam
+  set sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into itdbam
+  set sampleid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into abrabam
+  set sampleid, file("${sampleid}.bam"),file("${sampleid}.bam.bai") into mdupbam
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -114,13 +117,13 @@ process abra2 {
 }
 process markdups {
   label 'dnaalign'
-  publishDir "$params.output/$caseid/dnaout", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnaout", mode: 'copy'
 
   input:
-  set caseid,tid,nid,sampleid, file(sbam) from mdupbam
+  set sampleid, file(sbam) from mdupbam
   output:
-  set caseid,tid,nid,sampleid, file("${sampleid}.consensus.bam"),file("${sampleid}.consensus.bam.bai") into togatkbam
-  set caseid,tid,nid,file("${sampleid}.consensus.bam"),file("${sampleid}.consensus.bam.bai") into consbam
+  set sampleid, file("${sampleid}.consensus.bam"),file("${sampleid}.consensus.bam.bai") into togatkbam
+  set sampleid,file("${sampleid}.consensus.bam"),file("${sampleid}.consensus.bam.bai") into consbam
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -134,9 +137,9 @@ process markdups {
 
 process dna_bamqc {
   label 'profiling_qc'
-  publishDir "$params.output/$caseid/dnaout", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnaout", mode: 'copy'
   input:
-  set caseid,sampleid, file(gbam),file(idx),file(trimreport) from qcbam
+  set sampleid, file(gbam),file(idx),file(trimreport) from qcbam
   output:
   file("*fastqc*") into fastqc
   file("${sampleid}*txt") into dalignstats
@@ -150,9 +153,9 @@ process dna_bamqc {
 
 process cnv {
   label 'structuralvariant'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnacallset", mode: 'copy'
   input:
-  set caseid,sampleid,file(sbam),file(sidx) from cnvbam
+  set sampleid,file(sbam),file(sidx) from cnvbam
 
   output:
   file("${sampleid}.call.cns") into cns
@@ -171,9 +174,9 @@ process cnv {
 
 process itdseek {
   label 'structuralvariant'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnacallset", mode: 'copy'
   input:
-  set caseid,sampleid,file(sbam),file(sidx) from itdbam
+  set sampleid,file(sbam),file(sidx) from itdbam
 
   output:
   file("${sampleid}.itdseek_tandemdup.vcf.gz") into itdseekvcf
@@ -189,12 +192,12 @@ process itdseek {
 
 process gatkbam {
   label 'variantcalling'
-  publishDir "$params.output/$caseid/dnaout", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnaout", mode: 'copy'
 
   input:
-  set caseid,tid,nid,sampleid, file(sbam),file(idx) from togatkbam
+  set sampleid, file(sbam),file(idx) from togatkbam
   output:
-  set caseid,tid,nid,file("${sampleid}.final.bam"),file("${sampleid}.final.bam.bai") into gtxbam
+  set sampleid,file("${sampleid}.final.bam"),file("${sampleid}.final.bam.bai") into gtxbam
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -213,7 +216,7 @@ abrabam
 
 consbam
   .groupTuple(by:[0,1,2])
-  .into { checkbams; sombam; germbam; }
+  .into { checkbams; sombam; alt_vc_bam; }
 
 gtxbam
   .groupTuple(by:[0,1,2])
@@ -221,152 +224,111 @@ gtxbam
 
 process msi {
   label 'profiling_qc'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnacallset", mode: 'copy'
   input:
-  set caseid,tid,nid,file(ssbam),file(ssidx) from msibam
+  set sampleid,file(ssbam),file(ssidx) from msibam
   output:
-  file("${caseid}*") into msiout
+  file("${sampleid}*") into msiout
   when:
   params.skipMSI == false && params.min == false
   script:
-  if ( somatic[caseid] == true )
   """
-  bash ${repoDir}/process_scripts/variants/msisensor.sh -r ${index_path} -p $caseid -b ${tid}.bam -n ${nid}.bam -c $capturebed
-  """
-  else
-  """
-  bash ${repoDir}/process_scripts/variants/msisensor.sh -r ${index_path} -p $caseid -b ${tid}.bam -c $capturebed
+  bash ${repoDir}/process_scripts/variants/msisensor.sh -r ${index_path} -p $sampleid -b ${sampleid}.bam -c $capturebed
   """
 }
 
 process pindel {
   label 'pindel'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnacallset", mode: 'copy'
   input:
-  set caseid,tid,nid,file(ssbam),file(ssidx) from pindelbam
+  set sampleid,file(ssbam),file(ssidx) from pindelbam
   output:
-  file("${caseid}.pindel_tandemdup.vcf.gz") into tdvcf
-  set caseid,file("${caseid}.pindel.vcf.gz") into pindelvcf
-  file("${caseid}.pindel.genefusion.txt") into pindelgf
+  file("${sampleid}.pindel_tandemdup.vcf.gz") into tdvcf
+  set sampleid,file("${sampleid}.pindel.vcf.gz") into pindelvcf
+  file("${sampleid}.pindel.genefusion.txt") into pindelgf
   when:
   params.min == false
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -p $caseid -l $params.itdbed -a pindel -c $capturebed -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
+  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -p $sampleid -l $params.itdbed -a pindel -c $capturebed -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
   """
 }
 
 process sv {
   label 'structuralvariant'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnacallset", mode: 'copy'
 
   input:
-  set caseid,tid,nid,file(ssbam),file(ssidx) from svbam
+  set sampleid,file(ssbam),file(ssidx) from svbam
   each algo from svalgo
   output:
-  set caseid,file("${caseid}.${algo}.vcf.gz") into svvcf
-  set caseid,file("${caseid}.${algo}.sv.vcf.gz") optional true into svsv
-  file("${caseid}.${algo}.genefusion.txt") into svgf
+  set sampleid,file("${sampleid}.${algo}.vcf.gz") into svvcf
+  set sampleid,file("${sampleid}.${algo}.sv.vcf.gz") optional true into svsv
+  file("${sampleid}.${algo}.genefusion.txt") into svgf
   when:
   params.min == false
   script:
-  if ( somatic[caseid] == true )
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -x ${tid} -y ${nid} -b ${tid}.bam -n ${nid}.bam -p $caseid -a ${algo} -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
-  """
-  else
-  """
-  memory=\$(echo ${task.memory} | cut -d ' ' -f1)
-  echo \$memory
-  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -b ${tid}.bam -p $caseid -a ${algo} -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
+  bash ${repoDir}/process_scripts/variants/svcalling.sh -r $index_path -b ${sampleid}.bam -p $sampleid -a ${algo} -g $params.snpeff_vers -z ${task.cpus} -m \${memory} -f
   """
 }
 
 process mutect {
   label 'variantcalling'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnacallset", mode: 'copy'
 
   input:
-  set caseid,tid,nid,file(ssbam),file(ssidx) from mutectbam
+  set sampleid,file(ssbam),file(ssidx) from mutectbam
   output:
-  set caseid,file("${caseid}.mutect.vcf.gz") into mutectvcf
-  set caseid,file("${caseid}.mutect.ori.vcf.gz") into mutectori
-  script:
-  if ( somatic[caseid] == true )
-  """
-  memory=\$(echo ${task.memory} | cut -d ' ' -f1)
-  echo \$memory
-  bash ${repoDir}/process_scripts/variants/somatic_vc.sh $ponopt -r $index_path -p $caseid -x $tid -y $nid -t ${tid}.final.bam -n ${nid}.final.bam -b $capturebed -a mutect -c ${task.cpus} -m \${memory}
-  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.mutect -v ${caseid}.mutect.vcf.gz
-  """
-  else
-  """
-  memory=\$(echo ${task.memory} | cut -d ' ' -f1)
-  echo \$memory
-  bash ${repoDir}/process_scripts/variants/germline_vc.sh $ponopt -r $index_path -p $caseid -b $capturebed -a mutect -c ${task.cpus} -m \${memory}
-  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.mutect -v ${caseid}.mutect.vcf.gz
-  """
-}
-
-process somvc {
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
-  label 'variantcalling'
-
-  input:
-  set caseid,tid,nid,file(ssbam),file(ssidx) from sombam
-  each algo from ssalgo
-  output:
-  set caseid,file("${caseid}.${algo}.vcf.gz") into ssvcf
-  set caseid,file("${caseid}.${algo}.ori.vcf.gz") into ssori
-  when:
-  somatic[caseid] == true
+  set sampleid,file("${sampleid}.mutect.vcf.gz") into mutectvcf
+  set sampleid,file("${sampleid}.mutect.ori.vcf.gz") into mutectori
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/variants/somatic_vc.sh -r $index_path -p $caseid -x $tid -y $nid -n ${nid}.consensus.bam -t ${tid}.consensus.bam -a ${algo} -b $capturebed -c ${task.cpus} -m \${memory}
-  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.${algo} -v ${caseid}.${algo}.vcf.gz
+  bash ${repoDir}/process_scripts/variants/germline_vc.sh $ponopt -r $index_path -p $sampleid -b $capturebed -a mutect -c ${task.cpus} -m \${memory}
+  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${sampleid}.mutect -v ${sampleid}.mutect.vcf.gz
   """
 }
 
-process germvc {
+process alt_vc {
   label 'variantcalling'
-  publishDir "$params.output/$caseid/dnacallset", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnacallset", mode: 'copy'
   input:
-  set caseid,tid,nid,file(gbam),file(gidx) from germbam
+  set sampleid,file(gbam),file(gidx) from alt_vc_bam
   each algo from fpalgo
   output:
-  set caseid,file("${caseid}.${algo}.vcf.gz") into germvcf
-  set caseid,file("${caseid}.${algo}.ori.vcf.gz") into germori
+  set sampleid,file("${sampleid}.${algo}.vcf.gz") into alt_vcf
+  set sampleid,file("${sampleid}.${algo}.ori.vcf.gz") into alt_ori
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
   echo \$memory
-  bash ${repoDir}/process_scripts/variants/germline_vc.sh -r $index_path -p $caseid -a ${algo} -b $capturebed -c ${task.cpus} -m \${memory}
-  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${caseid}.${algo} -v ${caseid}.${algo}.vcf.gz
+  bash ${repoDir}/process_scripts/variants/germline_vc.sh -r $index_path -p $sampleid -a ${algo} -b $capturebed -c ${task.cpus} -m \${memory}
+  bash ${repoDir}/process_scripts/variants/uni_norm_annot.sh -g $params.snpeff_vers -r $index_path -p ${sampleid}.${algo} -v ${sampleid}.${algo}.vcf.gz
   """
 }
 
 Channel
   .empty()
-  .mix(mutectvcf,ssvcf,pindelvcf,germvcf)
+  .mix(mutectvcf,pindelvcf,alt_vcf)
   .groupTuple(by:0)
   .set { vcflist}
 
 process integrate {
   label 'variantcalling'
-  publishDir "$params.output/$caseid/dnavcf", mode: 'copy'
+  publishDir "$params.output/$sampleid/dnavcf", mode: 'copy'
   input:
-  set caseid,file(vcf) from vcflist
+  set sampleid,file(vcf) from vcflist
   output:
-  file("${caseid}.union.vcf.gz") into unionvcf
+  file("${sampleid}.union.vcf.gz") into unionvcf
   script:
   """
-  bash ${repoDir}/process_scripts/variants/union.sh -r $index_path -p $caseid
-  #cp ${caseid}.union.vcf.gz ${caseid}.dna.vcf.gz
+  bash ${repoDir}/process_scripts/variants/union.sh -r $index_path -p $sampleid
+  #cp ${sampleid}.union.vcf.gz ${sampleid}.dna.vcf.gz
   """
 }
