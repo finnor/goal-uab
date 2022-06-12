@@ -24,9 +24,13 @@ if (params.pon) {
 }
 
 input_dir = file("$params.input")
-sample_sheet = file("$params.input/SampleSheet.csv")
 
-if( ! input_dir || ! sample_sheet) { error "Could not find required files" }
+if (params.startFromBcl) {
+  sample_sheet = file("$params.input/SampleSheet.csv")
+  if( ! input_dir || ! sample_sheet) { error "Could not find required files" }
+} else {
+  if( ! input_dir) { error "Could not find required files" }
+}
 
 process mutate_sample_sheet {
   label 'python'
@@ -34,6 +38,8 @@ process mutate_sample_sheet {
   file sample_sheet_file from sample_sheet
   output:
   file("NewSampleSheet.csv") into bcl_convert_sample_sheet
+  when:
+  params.startFromBcl == true
   shell:
     """
     python ${repoDir}/process_scripts/uab/mutateSampleSheet.py ${sample_sheet_file} "${params.overrideCycles}"
@@ -49,6 +55,8 @@ process bcl_convert {
   output:
   file("*.fastq.gz") into dtrim_reads
   file("SampleSheet.csv")
+  when:
+  params.startFromBcl == true
   script:
   """
   bcl-convert bcl-convert \
@@ -58,11 +66,19 @@ process bcl_convert {
   """
 }
 
-dtrim_reads
-  .flatten()
-  .map { read -> [read.name.split("_")[0] , read] }
-  .groupTuple(by: 0)
-  .set { reads; }
+if(params.startFromBcl) {
+  dtrim_reads
+    .flatten()
+    .map { read -> [read.name.split("_")[0], read] }
+    .groupTuple(by: 0)
+    .set { reads; }
+} else {
+  Channel.fromPath(input_dir+"/*.fastq.gz")
+    .map { read -> [read.name.split("_")[0], read] }
+    .groupTuple(by: 0)
+    .set { reads; }
+}
+
 
 
 process dtrim {
