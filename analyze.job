@@ -43,6 +43,7 @@ then
   then
     module load Singularity
     module load Nextflow
+    mkdir -p /scratch/$USER/GOAL/logs
     WORK_DIR_OPT="-w /scratch/$USER/GOAL/work_dir"
   fi
   if [ "$PROFILE" == "uab_hydrogen" ]
@@ -59,6 +60,7 @@ else
   # Assume Cheaha
   module load Singularity
   module load Nextflow
+  mkdir -p /scratch/$USER/GOAL/logs
   WORK_DIR_OPT="-w /scratch/$USER/GOAL/work_dir"
   PROFILE_OPT="-profile uab_cheaha"
 fi
