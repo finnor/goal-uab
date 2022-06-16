@@ -59,7 +59,7 @@ else
   # Assume Cheaha
   module load Singularity
   module load Nextflow
-  WORK_DIR_OPT="-w /data/user/$USER/GOAL/work_dir"
+  WORK_DIR_OPT="-w /scratch/$USER/GOAL/work_dir"
   PROFILE_OPT="-profile uab_cheaha"
 fi
 
