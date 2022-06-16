@@ -25,10 +25,12 @@ if (params.pon) {
 
 input_dir = file("$params.input")
 
+
 if (params.startFromBcl) {
   sample_sheet = file("$params.input/SampleSheet.csv")
   if( ! input_dir || ! sample_sheet) { error "Could not find required files" }
 } else {
+  sample_sheet = Channel.empty()
   if( ! input_dir) { error "Could not find required files" }
 }
 
@@ -101,7 +103,7 @@ process dalign {
   output:
   set sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into cnvbam
   set sampleid, file("${sampleid}.bam"),file("${sampleid}.bam.bai"),file(trimout) into qcbam
-  set sampleid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into oribam
+  set sampleid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into msibam
   set sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into align
   script:
   """
@@ -118,7 +120,7 @@ process abra2 {
   set sampleid,file(sbam),file(bai) from align
   output:
   set sampleid,file("${sampleid}.bam"),file("${sampleid}.bam.bai") into itdbam
-  set sampleid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into abrabam
+  set sampleid,file("${sampleid}.bam"), file("${sampleid}.bam.bai") into svbam
   set sampleid, file("${sampleid}.bam"),file("${sampleid}.bam.bai") into mdupbam
   script:
   """
@@ -139,7 +141,7 @@ process markdups {
   set sampleid, file(sbam) from mdupbam
   output:
   set sampleid, file("${sampleid}.consensus.bam"),file("${sampleid}.consensus.bam.bai") into togatkbam
-  set sampleid,file("${sampleid}.consensus.bam"),file("${sampleid}.consensus.bam.bai") into consbam
+  set sampleid,file("${sampleid}.consensus.bam"),file("${sampleid}.consensus.bam.bai") into alt_vc_bam
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -213,7 +215,8 @@ process gatkbam {
   input:
   set sampleid, file(sbam),file(idx) from togatkbam
   output:
-  set sampleid,file("${sampleid}.final.bam"),file("${sampleid}.final.bam.bai") into gtxbam
+  set sampleid,file("${sampleid}.final.bam"),file("${sampleid}.final.bam.bai") into pindelbam
+  set sampleid,file("${sampleid}.final.bam"),file("${sampleid}.final.bam.bai") into mutectbam
   script:
   """
   memory=\$(echo ${task.memory} | cut -d ' ' -f1)
@@ -221,22 +224,6 @@ process gatkbam {
   bash ${repoDir}/process_scripts/variants/gatkrunner.sh -a gatkbam -b $sbam -r $index_path -p $sampleid -c ${task.cpus} -m \${memory}
   """
 }
-
-oribam
-  .groupTuple(by:[0,1,2])
-  .into { msibam; }
-
-abrabam
-  .groupTuple(by:[0,1,2])
-  .into { svbam; }
-
-consbam
-  .groupTuple(by:[0,1,2])
-  .into { checkbams; sombam; alt_vc_bam; }
-
-gtxbam
-  .groupTuple(by:[0,1,2])
-  .into { mutectbam; pindelbam; }
 
 process msi {
   label 'profiling_qc'
