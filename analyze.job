@@ -6,6 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --time=12:00:00
 #SBATCH --mem=8G
+#$ -N goal_pipeline
 
 
 help_and_exit() {
