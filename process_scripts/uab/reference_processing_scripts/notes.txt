@@ -1,0 +1,150 @@
+####################### Cosmic ###############################################
+CosmicCodingMuts.vcf.gz
+CosmicNonCodingVariants.vcf.gz
+
+COSMIC_AUTH_STRING=$(echo '<username>:<password>' | base64)
+COSMIC_URL=$(curl -H "Authorization: Basic $COSMIC_AUTH_STRING" https://cancer.sanger.ac.uk/cosmic/file_download/GRCh37/cosmic/v94/VCF/CosmicCodingMuts.vcf.gz | grep -Po '"url": *\K"[^"]*"' | tr -d '"')
+curl "$COSMIC_URL" -o CosmicCodingMuts.vcf.gz
+
+COSMIC_URL=$(curl -H "Authorization: Basic $COSMIC_AUTH_STRING" https://cancer.sanger.ac.uk/cosmic/file_download/GRCh37/cosmic/v94/VCF/CosmicNonCodingVariants.vcf.gz | grep -Po '"url": *\K"[^"]*"' | tr -d '"')
+curl "$COSMIC_URL" -o CosmicNonCodingVariants.vcf.gz
+
+vcf-concat CosmicCodingMuts.vcf.gz CosmicNonCodingVariants.vcf.gz | vcf-sort | bgzip -c > cosmic.vcf.gz
+tabix cosmic.vcf.gz
+
+
+####################### Clinvar    ###############################################
+wget https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh37/clinvar.vcf.gz
+wget https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh37/clinvar.vcf.gz.tbi
+
+
+####################### MSI Baseline?????? ###############################################
+tar xvf msiref.tar.gz
+rm msiref.tar.gz
+tar cfz panel.tar.gz microsatellites.list* targetpanel.bed
+
+
+####################### GATK dbSNP???? ###############################################
+current
+##fileformat=VCFv4.1
+##dbSNP_BUILD_ID=135
+##fileDate=20111104
+##phasing=partial
+##reference=GRCh37.3
+##reference=file:///humgen/gsa-hpprojects/GATK/bundle/current/b37/human_g1k_v37.fasta
+##source=dbSNP
+##variationPropertyDocumentationUrl=ftp://ftp.ncbi.nlm.nih.gov/snp/specs/dbSNP_BitField_latest.pdf
+chr1
+
+
+brandis
+##fileformat=VCFv4.0
+##fileDate=20160528
+##source=dbSNP
+##dbSNP_BUILD_ID=147
+##reference=GRCh38.p2
+##phasing=partial
+##variationPropertyDocumentationUrl=ftp://ftp.ncbi.nlm.nih.gov/snp/specs/dbSNP_BitField_latest.pdf
+chr1
+
+
+
+new one
+##fileformat=VCFv4.0
+##fileDate=20180419
+##source=dbSNP
+##dbSNP_BUILD_ID=151
+##reference=GRCh37.p13
+##phasing=partial
+##variationPropertyDocumentationUrl=ftp://ftp.ncbi.nlm.nih.gov/snp/specs/dbSNP_BitField_latest.pdf
+1
+
+wget https://ftp.ncbi.nih.gov/snp/organisms/human_9606_b151_GRCh38p7/VCF/00-All.vcf.gz
+zcat 00-All.vcf.gz | awk '{
+        if($0 !~ /^#/)
+            print "chr"$0;
+        else if(match($0,/(##contig=<ID=)(.*)/,m))
+            print m[1]"chr"m[2];
+        else print $0
+      }' | bgzip -c > dbSnp.vcf.gz
+tabix dbSnp.gatk.vcf.gz
+bcftools norm --fasta-ref ../genome/GOAL_GRCh37_final/genome.fa -c wx --multiallelic - dbSnp.withChr.vcf.gz
+
+####################### Cancer Hotspots ######################################
+####Template
+#Download
+https://www.cancerhotspots.org/#/download
+#Run parseCancerHotspots.py
+docker run --rm -it -v ${PWD}:/data amancevice/pandas:1.3.2 parseCancerHotspots.py /data/path/to/cancerhotspots.v2.maf.gz /data/path/to/out/oncokb_hotspot.txt
+sort -k1,1 -k2,2n oncokb_hotspot.txt | bgzip -c > oncokb_hotspot.txt.gz
+tabix oncokb_hotspot.txt.gz -p bed
+
+####UAB
+docker run --rm -it -v ${PWD}:/data amancevice/pandas:1.3.2 python /data/reference_processing_scripts/parseCancerHotspots.py /data/my_scripts/data/CancerHotspots/cancerhotspots.v2.maf.gz /data/my_scripts/data/CancerHotspots/oncokb_hotspot.txt
+
+
+
+####################### gnomAD ######################################
+gsutil cp gs://gcp-public-data--gnomad/release/2.1.1/vcf/genomes/gnomad.genomes.r2.1.1.sites.vcf.bgz ./
+docker run --rm -it -v ${PWD}:/data amancevice/pandas:1.3.2 /data/parseGnomAD.py /data/path/to/gnomad.genomes.r2.1.1.sites.vcf.bgz /data/path/to/out/gnomad.txt -c
+bgzip gnomad.txt
+tabix gnomad.txt.gz -p vcf
+
+
+####UAB
+qsub -cwd jobName
+docker run --rm -it -v ${PWD}:/data amancevice/pandas:1.3.2 python /data/parseGnomAD.py /data/temp/gnomad.genomes.r2.1.1.sites.vcf.bgz /data/temp/gnomad.txt -c
+
+
+
+
+
+####################### simpleRepeat.txt.gz ######################################
+wget http://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/simpleRepeat.txt.gz
+wget http://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/rmsk.txt.gz
+
+
+zcat rmsk.txt.gz | awk -v OFS='\t' '{ if( $12!=$13 ) {print $6, $7, $8, $12","$13} else {print $6, $7, $8, $12} }' > rmsk.bed
+zcat simpleRepeat.txt.gz | awk -v OFS='\t' '{ print $2, $3, $4, $5}' > simpleRepeat.bed
+
+cat rmsk.bed simpleRepeat.bed | bedtools sort -i stdin | bedtools merge -i stdin -c 4 -o distinct -delim "," | bgzip > repeat_regions_dupped.bed.gz
+
+docker run --rm -v ${PWD}:/data amancevice/pandas:1.3.2 python /data/dedupRepeats.py /data/temp/repeat_regions_dupped.bed.gz /data/temp/repeat_regions_dedupped.bed
+cat repeat_regions_dedupped.bed | bgzip > repeat_regions.bed.gz
+tabix repeat_regions.bed.gz -p bed
+
+####################### commonsnps.bed ######################################
+wget http://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/snp151Common.txt.gz
+docker run --rm -v ${PWD}:/data amancevice/pandas:1.3.2 python /data/parsedbSNP.py /data/temp/snp151Common.txt.gz /data/temp/commonsnps.bed
+
+
+
+####################### CNVkit ######################################
+cnvkit.py target goal_core497.hg19.bed --split -o my_targets.bed
+cnvkit.py antitarget goal_core497.hg19.bed -g cnvkit/data/access-5k-mappable.hg19.bed -o my_antitargets.bed
+
+# for each normal bam
+cnvkit.py coverage normal_bams/test.bam my_targets.bed -o coverage/test.targetcoverage.cnn
+cnvkit.py coverage normal_bams/test.bam my_antitargets.bed -o coverage/test.antitargetcoverage.cnn
+
+cnvkit.py coverage normal_bams/test2.bam my_targets.bed -o coverage/test2.targetcoverage.cnn
+cnvkit.py coverage normal_bams/test2.bam my_antitargets.bed -o coverage/test2.antitargetcoverage.cnn
+
+cnvkit.py coverage normal_bams/test3.bam my_targets.bed -o coverage/test3.targetcoverage.cnn
+cnvkit.py coverage normal_bams/test3.bam my_antitargets.bed -o coverage/test3.antitargetcoverage.cnn
+
+cnvkit.py coverage normal_bams/test4.bam my_targets.bed -o coverage/test4.targetcoverage.cnn
+cnvkit.py coverage normal_bams/test4.bam my_antitargets.bed -o coverage/test4.antitargetcoverage.cnn
+
+cnvkit.py coverage normal_bams/test5.bam my_targets.bed -o coverage/test5.targetcoverage.cnn
+cnvkit.py coverage normal_bams/test5.bam my_antitargets.bed -o coverage/test5.antitargetcoverage.cnn
+
+
+# Make reference
+cnvkit.py reference coverage/*.{,anti}targetcoverage.cnn --fasta genome.fa -o pon.cnn
+
+
+
+
+
+
